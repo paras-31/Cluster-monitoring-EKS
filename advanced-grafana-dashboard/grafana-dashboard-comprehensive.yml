@@ -1,0 +1,128 @@
+---
+# Comprehensive Kubernetes Monitoring Dashboard
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-comprehensive
+  namespace: monitoring
+data:
+  comprehensive-dashboard.json: |
+    {
+      "id": null,
+      "uid": "comprehensive-monitoring",
+      "title": "Kubernetes Comprehensive Monitoring",
+      "description": "Complete cluster, namespace, and pod resource monitoring",
+      "tags": ["kubernetes", "cluster", "monitoring"],
+      "timezone": "browser",
+      "refresh": "30s",
+      "schemaVersion": 16,
+      "version": 1,
+      "time": {"from": "now-1h", "to": "now"},
+      "panels": [
+          {
+            "id": 1,
+            "title": "Ready Nodes",
+            "type": "stat",
+            "targets": [{"expr": "count(kube_node_labels)", "refId": "A"}],
+            "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+            "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}}}
+          },
+          {
+            "id": 2,
+            "title": "Total Pods",
+            "type": "stat",
+            "targets": [{"expr": "count(kube_pod_info)", "refId": "A"}],
+            "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+            "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "blue", "value": null}]}}}
+          },
+          {
+            "id": 3,
+            "title": "Namespaces",
+            "type": "stat",
+            "targets": [{"expr": "count(kube_namespace_labels)", "refId": "A"}],
+            "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+            "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "purple", "value": null}]}}}
+          },
+          {
+            "id": 4,
+            "title": "Deployments",
+            "type": "stat",
+            "targets": [{"expr": "count(kube_deployment_labels)", "refId": "A"}],
+            "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+            "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "orange", "value": null}]}}}
+          },
+          {
+            "id": 5,
+            "title": "Node CPU Usage %",
+            "type": "graph",
+            "targets": [{"expr": "100 * (1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) by (node))", "refId": "A", "legendFormat": "{{node}}"}],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4}
+          },
+          {
+            "id": 6,
+            "title": "Node Memory Usage %",
+            "type": "graph",
+            "targets": [{"expr": "100 * (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes))", "refId": "A", "legendFormat": "{{instance}}"}],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4}
+          },
+          {
+            "id": 7,
+            "title": "Pod Count by Node",
+            "type": "graph",
+            "targets": [{"expr": "count(kube_pod_info) by (node)", "refId": "A", "legendFormat": "{{node}}"}],
+            "gridPos": {"h": 8, "w": 8, "x": 0, "y": 12}
+          },
+          {
+            "id": 8,
+            "title": "Pod Status Distribution",
+            "type": "piechart",
+            "targets": [{"expr": "count(kube_pod_status_phase) by (phase)", "refId": "A", "legendFormat": "{{phase}}"}],
+            "gridPos": {"h": 8, "w": 8, "x": 8, "y": 12}
+          },
+          {
+            "id": 9,
+            "title": "Container Restarts",
+            "type": "stat",
+            "targets": [{"expr": "sum(kube_pod_container_status_restarts_total)", "refId": "A"}],
+            "gridPos": {"h": 8, "w": 8, "x": 16, "y": 12},
+            "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}]}}}
+          },
+          {
+            "id": 10,
+            "title": "Pods by Namespace",
+            "type": "graph",
+            "targets": [{"expr": "count(kube_pod_info) by (namespace)", "refId": "A", "legendFormat": "{{namespace}}"}],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20}
+          },
+          {
+            "id": 11,
+            "title": "CPU Requests vs Limits (All Pods)",
+            "type": "graph",
+            "targets": [
+              {"expr": "sum(kube_pod_container_resource_requests{resource=\"cpu\"})", "refId": "A", "legendFormat": "Requests"},
+              {"expr": "sum(kube_pod_container_resource_limits{resource=\"cpu\"})", "refId": "B", "legendFormat": "Limits"}
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20}
+          },
+          {
+            "id": 12,
+            "title": "Memory Requests vs Limits (All Pods)",
+            "type": "graph",
+            "targets": [
+              {"expr": "sum(kube_pod_container_resource_requests{resource=\"memory\"})", "refId": "A", "legendFormat": "Requests"},
+              {"expr": "sum(kube_pod_container_resource_limits{resource=\"memory\"})", "refId": "B", "legendFormat": "Limits"}
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 28}
+          },
+          {
+            "id": 13,
+            "title": "Running vs Desired Replicas",
+            "type": "graph",
+            "targets": [
+              {"expr": "sum(kube_deployment_status_replicas_available)", "refId": "A", "legendFormat": "Running"},
+              {"expr": "sum(kube_deployment_spec_replicas)", "refId": "B", "legendFormat": "Desired"}
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 28}
+          }
+        ]
+    }
