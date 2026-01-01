@@ -1,53 +1,589 @@
-# Advanced Grafana Dashboard Setup for EKS
+# Kubernetes Cluster Monitoring with Grafana & Prometheus
 
-This folder contains a complete, production-ready Kubernetes monitoring stack with Prometheus, Grafana, and kube-state-metrics.
+Complete EKS cluster monitoring solution with Grafana dashboards, Prometheus metrics collection, and LoadBalancer-based internet access.
 
-## What's Included
+## 📋 Overview
 
-### 1. **prometheus-deployment.yml**
-- Prometheus v3.8.1 configured to scrape:
-  - Node Exporter metrics (CPU, memory, disk, network)
-  - kube-state-metrics (cluster state, pods, deployments, namespaces)
-  - Kubernetes API server metrics
-- 15-day data retention
-- LoadBalancer service on port 80
-- RBAC configured for Kubernetes API access
+This setup provides comprehensive monitoring of your EKS cluster with:
+- **Real-time metrics** from Prometheus
+- **Interactive dashboards** in Grafana
+- **Internet-facing access** via AWS LoadBalancer
+- **Clean, maintainable architecture** with separated configuration files
 
-### 2. **grafana-deployment.yml**
-- Grafana v10.2.0 with auto-provisioning
-- Connects to Prometheus datasource
-- Dashboard auto-loads on startup
-- LoadBalancer service on port 80
-- Default credentials: admin/admin123
-- RBAC configured
+## 🏗️ Architecture
 
-### 3. **kube-state-metrics-deployment.yml**
-- kube-state-metrics v2.9.2
-- Runs as single replica deployment
-- Exposes metrics on port 8080
-- Collects state for:
-  - Nodes, Pods, Namespaces
-  - Deployments, StatefulSets, DaemonSets
-  - Jobs, CronJobs
-  - Services, Endpoints, PVCs
-  - Resource quotas, Network policies
+```
+┌─────────────────────────────────────────────────────────┐
+│                   EKS Cluster                            │
+├─────────────────────────────────────────────────────────┤
+│                                                           │
+│  ┌──────────────┐    ┌──────────────┐                  │
+│  │  Prometheus  │    │   Grafana    │                  │
+│  │  (Metrics)   │←→──│ (Dashboards) │                  │
+│  └──────────────┘    └──────────────┘                  │
+│         ↑                    ↓                           │
+│         │            AWS LoadBalancer                   │
+│    Scrapes:         (Port 80)                           │
+│    - Nodes          ↓                                    │
+│    - Pods      Internet Access                          │
+│    - kube-state └─────────────────────────────────────┘
+│    - node-exporter
+│
+└─────────────────────────────────────────────────────────┘
+```
 
-### 4. **grafana-dashboard-comprehensive.yml**
-- Single comprehensive dashboard with 13 panels
-- Covers cluster, namespace, and pod metrics
-- Includes:
-  - Ready Nodes count
-  - Total Pods count
-  - Namespaces count
-  - Deployments count
-  - Node CPU Usage %
-  - Node Memory Usage %
-  - Pod Count by Node
-  - Pod Status Distribution
-  - Container Restarts
-  - Pods by Namespace
-  - CPU Requests vs Limits
-  - Memory Requests vs Limits
+## 📁 File Structure
+
+```
+advanced-grafana-dashboard/
+├── README.md                          # This documentation
+├── grafana-deployment.yml             # RBAC, Service, Grafana Deployment
+├── grafana-configmaps.yml             # Dashboard, Datasource, Provisioning configs
+├── prometheus-deployment.yml           # Prometheus time-series DB
+├── node-exporter-deployment.yml        # Node CPU/Memory/Disk metrics
+└── kube-state-metrics-deployment.yml  # Kubernetes cluster state metrics
+```
+
+## 🔧 What Was Done
+
+### 1. **Separated Configuration Files** ⭐
+
+**Before**: Everything in one large file  
+**After**: Split into two files for better management
+
+#### **grafana-configmaps.yml** - Contains:
+- `grafana-datasources` ConfigMap → Prometheus connection details
+- `grafana-dashboards-provider` ConfigMap → Dashboard auto-provisioning config
+- `grafana-dashboard-kubernetes` ConfigMap → Full dashboard JSON definition
+
+#### **grafana-deployment.yml** - Contains:
+- ServiceAccount → Grafana identity
+- ClusterRole → Permissions to read ConfigMaps
+- ClusterRoleBinding → Grant permissions
+- Service → LoadBalancer for internet access
+- Deployment → Grafana pods
+
+**Benefits**:
+✅ Update dashboards without pod restart  
+✅ Easier to version control  
+✅ Cleaner, more maintainable structure  
+✅ Reusable configuration patterns  
+
+### 2. **Created Comprehensive Dashboard with 11 Panels**
+
+#### **Panel 1-5: Cluster Overview (Stats) - Top Row**
+| Panel | Shows | Example |
+|-------|-------|---------|
+| Total Nodes | Worker node count | 2 |
+| Total Pods | Running pods cluster-wide | 35 |
+| Total Namespaces | K8s namespaces | 5 |
+| Cluster CPU Usage | Total cores in use (all nodes) | 2.67 cores |
+| Cluster Memory Usage | Total RAM in use (all nodes) | 6.63 GB |
+
+#### **Panel 6-7: Node Metrics (Line Graphs)**
+- **Node CPU Usage %**: CPU utilization trend per node (visual)
+- **Node Memory Usage %**: Memory utilization trend per node (visual)
+
+Shows two lines: one for each worker node
+
+#### **Panel 8-11: Resource Allocation (Tables)**
+Shows what was **allocated** in deployment YAML:
+
+| Panel | Shows | Example |
+|-------|-------|---------|
+| CPU Requests | CPU min guaranteed per pod | 0.1 cores |
+| CPU Limits | CPU max allowed per pod | 0.2 cores |
+| Memory Requests | Memory min guaranteed (MB) | 128 MB |
+| Memory Limits | Memory max allowed (MB) | 256 MB |
+
+#### **Additional Panels: Pod Operations**
+- **Pod Restart Count**: Tracks pod crashes/restarts
+- **Pod Status**: Shows Running/Pending/Failed state
+- **Pod Ready Status**: Container readiness indicator
+- **Network In/Out**: Network traffic per interface
+
+### 3. **Prometheus Datasource Configuration**
+
+**File Location**: `grafana-configmaps.yml` → `grafana-datasources` ConfigMap
+
+```yaml
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    type: prometheus
+    url: http://prometheus-service.monitoring.svc.cluster.local:80
+    isDefault: true
+    jsonData:
+      timeInterval: "15s"
+```
+
+**Why Kubernetes DNS (`prometheus-service.monitoring.svc.cluster.local`) instead of IP?**
+
+| Aspect | DNS | IP |
+|--------|-----|-----|
+| **Stability** | Works if pod restarts | Breaks if pod IP changes |
+| **Service Discovery** | Auto-finds available pods | Manual IP management |
+| **Best Practice** | Kubernetes standard | ❌ Not recommended |
+| **Resilience** | Built-in load balancing | Manual balancing needed |
+
+### 4. **Dashboard Provisioning Setup**
+
+**File Location**: `grafana-configmaps.yml` → `grafana-dashboards-provider` ConfigMap
+
+```yaml
+apiVersion: 1
+providers:
+  - name: 'Default'
+    orgId: 1
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards
+```
+
+**How It Works**:
+
+```
+1. Grafana starts
+   ↓
+2. Reads provisioning config
+   ↓
+3. Looks for JSON files in /var/lib/grafana/dashboards
+   ↓
+4. Automatically imports all dashboards found
+   ↓
+5. Updates when ConfigMap changes (hot reload)
+```
+
+**Benefits**:
+- No manual dashboard import clicks
+- Infrastructure as Code (IaC)
+- Easy to update and version
+- Automatic deployment
+
+### 5. **Dashboard JSON Configuration**
+
+**File Location**: `grafana-configmaps.yml` → `grafana-dashboard-kubernetes` ConfigMap
+
+The JSON defines:
+
+```json
+{
+  "title": "Kubernetes Cluster Monitoring",  // Dashboard name
+  "uid": "kubernetes-cluster",               // Unique ID
+  "refresh": "30s",                          // Auto-refresh interval
+  "panels": [
+    {
+      "title": "Total Nodes",
+      "type": "stat",                        // Stat = big number
+      "targets": [
+        {
+          "expr": "count(kube_node_info)",   // PromQL query
+          "legendFormat": "Nodes"
+        }
+      ]
+    },
+    // ... more panels ...
+  ]
+}
+```
+
+**Panel Types Used**:
+- `stat` → Large numbers (Total Nodes, Total Pods, etc.)
+- `graph` → Line charts (CPU/Memory trends)
+- `table` → Tabular data (Requests/Limits/Restarts)
+
+### 6. **ConfigMap Importance** 🎯
+
+**What is a ConfigMap?**
+Kubernetes object to store non-sensitive configuration data.
+
+**Why ConfigMaps for Dashboards?**
+
+| Benefit | Explanation |
+|---------|-------------|
+| **Decoupling** | Change dashboards without container rebuild |
+| **Hot Reload** | Update configs without pod restart (most cases) |
+| **Version Control** | Track dashboard changes in git |
+| **Reusability** | Share configs across environments |
+| **Flexibility** | Easy to update queries and panels |
+| **Non-sensitive** | Dashboard JSON is not sensitive (no secrets) |
+
+**Alternative (Secrets)** would be used for:
+- Database passwords
+- API keys
+- Certificates
+- OAuth tokens
+
+### 7. **Grafana Setup Process** 🔐
+
+#### **A. RBAC (Role-Based Access Control)**
+
+```yaml
+---
+# Identity for Grafana
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: grafana
+  namespace: monitoring
+
+---
+# Permissions Grafana needs
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: grafana
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]  # Read ConfigMaps
+
+---
+# Grant permissions to Grafana
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: grafana
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: grafana
+subjects:
+  - kind: ServiceAccount
+    name: grafana
+    namespace: monitoring
+```
+
+**Why?** Grafana needs permission to read ConfigMaps for provisioning dashboards.
+
+#### **B. Environment Variables**
+
+```yaml
+env:
+  - name: GF_SECURITY_ADMIN_USER
+    value: "admin"
+  - name: GF_SECURITY_ADMIN_PASSWORD
+    value: "admin123"
+  - name: GF_SERVER_ROOT_URL
+    value: "http://k8s-monitori-grafanas-2a92f98a2e-7f5015763c8b45b2.elb.us-east-1.amazonaws.com"
+  - name: GF_INSTALL_PLUGINS
+    value: "grafana-clock-panel"
+```
+
+| Variable | Purpose |
+|----------|---------|
+| `ADMIN_USER` | Login username |
+| `ADMIN_PASSWORD` | Login password |
+| `ROOT_URL` | External access URL (LoadBalancer DNS) |
+| `INSTALL_PLUGINS` | Additional plugins |
+
+#### **C. Volume Mounts**
+
+```yaml
+volumeMounts:
+  - name: grafana-storage
+    mountPath: /var/lib/grafana          # Grafana data
+  - name: datasource-config
+    mountPath: /etc/grafana/provisioning/datasources
+  - name: dashboard-provider
+    mountPath: /etc/grafana/provisioning/dashboards
+  - name: dashboard-config
+    mountPath: /var/lib/grafana/dashboards
+```
+
+**What Each Contains**:
+- `grafana-storage` → Grafana database, user preferences (emptyDir = lost on pod restart)
+- `datasource-config` → Prometheus connection details
+- `dashboard-provider` → Where to find dashboards
+- `dashboard-config` → Actual dashboard JSON files
+
+#### **D. Resource Allocation**
+
+```yaml
+resources:
+  requests:
+    memory: "128Mi"
+    cpu: "100m"
+  limits:
+    memory: "256Mi"
+    cpu: "200m"
+```
+
+Keeps Grafana lightweight and prevents resource hogging.
+
+## 🌐 LoadBalancer Access Explained
+
+### **What is a LoadBalancer Service?**
+
+In Kubernetes, a `Service` of type `LoadBalancer` exposes your application to the internet by leveraging cloud provider load balancers.
+
+### **How Grafana LoadBalancer Works**
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana-service
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+spec:
+  type: LoadBalancer
+  selector:
+    app: grafana
+  ports:
+    - port: 80              # External port (internet)
+      targetPort: 3000      # Container port (Grafana)
+```
+
+### **Access Flow**
+
+```
+┌─ User Browser ──┐
+│ http://DNS:80   │
+└────────┬────────┘
+         ↓
+    [AWS Network Load Balancer]
+    (Manages port 80 publicly)
+         ↓
+    [Kubernetes Service - Port 80]
+    (Routes to pod port 3000)
+         ↓
+    [Grafana Pod - Port 3000]
+    (Running Grafana application)
+         ↓
+    [Dashboard UI]
+```
+
+### **Why `internet-facing` Annotation?**
+
+```yaml
+annotations:
+  service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+```
+
+| Option | What it Does | Use Case |
+|--------|--------------|----------|
+| `internet-facing` | Public IP, accessible from internet | ✅ User dashboards |
+| `internal` | VPC-only access, no internet | Internal services |
+
+## 🚀 Accessing the Dashboard
+
+### **Step 1: Get LoadBalancer DNS Name**
+```bash
+kubectl get svc grafana-service -n monitoring \
+  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+```
+
+**Output** (AWS NLB DNS):
+```
+k8s-monitori-grafanas-2a92f98a2e-7f5015763c8b45b2.elb.us-east-1.amazonaws.com
+```
+
+### **Step 2: Open in Browser**
+```
+http://k8s-monitori-grafanas-2a92f98a2e-7f5015763c8b45b2.elb.us-east-1.amazonaws.com
+```
+
+**Note**: Takes 1-2 minutes for AWS to provision the LoadBalancer initially
+
+### **Step 3: Login**
+| Field | Value |
+|-------|-------|
+| Username | `admin` |
+| Password | `admin123` |
+
+⚠️ **Change password in production!**
+
+### **Step 4: View Dashboard**
+Navigate to: **Dashboards** → **Kubernetes Cluster Monitoring**
+
+## 📊 Understanding Dashboard Metrics
+
+### **CPU Requests vs CPU Limits**
+
+```yaml
+resources:
+  requests:
+    cpu: 100m      # 0.1 cores guaranteed
+  limits:
+    cpu: 200m      # Max 0.2 cores allowed
+```
+
+| Metric | Meaning | Example |
+|--------|---------|---------|
+| **CPU Request** | Minimum CPU guaranteed by K8s scheduler | If set to 100m, scheduler ensures this CPU is available |
+| **CPU Limit** | Maximum CPU pod can use | If exceeded, pod gets throttled |
+| **CPU Usage** | Actual CPU being used right now | Seen in `kubectl top pod` |
+
+**In Dashboard**: 
+- CPU shows in **cores** (100m = 0.1 cores)
+- Memory shows in **MB** (converted from bytes)
+
+### **Example Interpretation**
+
+From the dashboard, if you see:
+```
+Pod: kafka
+Memory Request: 600 MB  ← K8s guarantees 600MB available
+Memory Limit: 600 MB    ← Pod cannot exceed 600MB
+```
+
+This means Kafka will get exactly 600MB reserved.
+
+**Why Default Namespace Shows Only Memory?**
+
+Default namespace pods only have memory configured:
+```bash
+kubectl get pods -n default -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.containers[0].resources}{"\n"}{end}'
+```
+
+Output shows memory but no CPU:
+```
+kafka  {"memory":"600Mi"}  ← No CPU request!
+```
+
+To add CPU, edit the deployment:
+```yaml
+resources:
+  requests:
+    cpu: 250m        # Add this
+    memory: 600Mi
+  limits:
+    cpu: 500m        # Add this
+    memory: 600Mi
+```
+
+## 🔄 Deployment Commands
+
+### **Initial Deployment (All Components)**
+```bash
+# 1. Deploy ConfigMaps (dashboards, datasources)
+kubectl apply -f grafana-configmaps.yml
+
+# 2. Deploy Grafana (RBAC, Service, Deployment)
+kubectl apply -f grafana-deployment.yml
+
+# 3. Deploy Prometheus
+kubectl apply -f prometheus-deployment.yml
+
+# 4. Deploy Node Exporter (node metrics)
+kubectl apply -f node-exporter-deployment.yml
+
+# 5. Deploy kube-state-metrics
+kubectl apply -f kube-state-metrics-deployment.yml
+```
+
+### **Update Dashboard Only (No Pod Restart)**
+```bash
+# Edit the JSON in grafana-configmaps.yml
+# Then apply:
+kubectl apply -f grafana-configmaps.yml
+
+# Grafana hot-reloads the dashboard!
+```
+
+### **Restart Grafana Pods**
+```bash
+kubectl rollout restart deployment/grafana -n monitoring
+
+# Watch the rollout
+kubectl rollout status deployment/grafana -n monitoring
+```
+
+## 🛠️ Troubleshooting
+
+### **Dashboard Shows "No Data"**
+```bash
+# Check Prometheus is scraping
+kubectl port-forward -n monitoring svc/prometheus-service 9090:80
+# Visit: http://localhost:9090/targets
+# All targets should show "UP"
+```
+
+### **LoadBalancer Shows "Pending"**
+```bash
+# AWS NLB takes 1-2 minutes to provision
+kubectl get svc grafana-service -n monitoring -w
+
+# When ready, you'll see EXTERNAL-IP populated
+```
+
+### **Cannot Access via LoadBalancer DNS**
+```bash
+# 1. Check service is internet-facing
+kubectl get svc grafana-service -n monitoring -o yaml | grep load-balancer-scheme
+
+# 2. Check AWS security groups allow port 80
+# 3. Verify pod is running
+kubectl get pods -n monitoring -l app=grafana
+```
+
+### **Grafana Pod Crashes**
+```bash
+# Check logs
+kubectl logs -n monitoring -l app=grafana --tail=100
+
+# Common issues:
+# - ConfigMap not mounted correctly
+# - Memory/CPU limits too low
+# - Datasource unreachable
+```
+
+## 📝 Summary of What Was Implemented
+
+✅ **Prometheus** - Metrics collection (scrapes all targets)  
+✅ **Grafana** - Dashboard visualization  
+✅ **node-exporter** - Node CPU/Memory/Disk metrics  
+✅ **kube-state-metrics** - Kubernetes state metrics  
+✅ **LoadBalancer** - Internet-facing access (no port-forward!)  
+✅ **ConfigMaps** - Dashboard as code (versioning support)  
+✅ **RBAC** - Proper permissions for Grafana  
+✅ **Auto-provisioning** - Dashboards load automatically  
+✅ **Clean Architecture** - Separated config files  
+
+## 🔒 Security Recommendations
+
+1. **Change Default Password**
+   ```bash
+   # In Grafana UI: Admin Panel → Change Password
+   ```
+
+2. **Use HTTPS**
+   ```bash
+   # Add TLS cert to LoadBalancer
+   # Or use AWS ACM certificate
+   ```
+
+3. **Restrict Access**
+   ```bash
+   # Add AWS security group rules
+   # Only allow your IP ranges
+   ```
+
+4. **Use Secrets for Sensitive Data**
+   ```bash
+   # Database passwords
+   # API keys
+   # OAuth tokens
+   # Use Kubernetes Secrets, not ConfigMaps
+   ```
+
+## 📚 Key Technologies
+
+| Component | Version | Purpose |
+|-----------|---------|---------|
+| Prometheus | 3.8.1 | Time-series metrics database |
+| Grafana | 10.2.0 | Dashboard & visualization |
+| node-exporter | 1.6.1 | Node OS metrics |
+| kube-state-metrics | 2.9.2 | Kubernetes state metrics |
+| AWS NLB | - | Network Load Balancer |
+
+---
+
+**Last Updated**: January 1, 2026  
+**Status**: ✅ Production Ready  
+**Maintainer**: Devops Team
+
   - Running vs Desired Replicas
 
 ## Quick Start
