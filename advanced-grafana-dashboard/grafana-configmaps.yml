@@ -1,0 +1,346 @@
+---
+# ConfigMap for Grafana Datasource Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: monitoring
+data:
+  prometheus.yml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus-service.monitoring.svc.cluster.local:80
+        isDefault: true
+        editable: true
+        jsonData:
+          timeInterval: "15s"
+
+---
+# ConfigMap for Grafana Provisioning Dashboard Provider
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards-provider
+  namespace: monitoring
+data:
+  dashboards.yml: |
+    apiVersion: 1
+    providers:
+      - name: 'Default'
+        orgId: 1
+        folder: ''
+        type: file
+        disableDeletion: false
+        options:
+          path: /var/lib/grafana/dashboards
+
+---
+# ConfigMap for Grafana Dashboard
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-kubernetes
+  namespace: monitoring
+data:
+  kubernetes-dashboard.json: |
+    {
+      "title": "Kubernetes Cluster Monitoring",
+      "uid": "kubernetes-cluster",
+      "timezone": "browser",
+      "schemaVersion": 16,
+      "version": 0,
+      "refresh": "30s",
+      "time": {
+        "from": "now-1h",
+        "to": "now"
+      },
+      "panels": [
+        {
+          "title": "Total Nodes",
+          "type": "stat",
+          "gridPos": {
+            "h": 4,
+            "w": 3,
+            "x": 0,
+            "y": 0
+          },
+          "targets": [
+            {
+              "expr": "count(kube_node_info)",
+              "legendFormat": "Nodes"
+            }
+          ]
+        },
+        {
+          "title": "Total Pods",
+          "type": "stat",
+          "gridPos": {
+            "h": 4,
+            "w": 3,
+            "x": 3,
+            "y": 0
+          },
+          "targets": [
+            {
+              "expr": "count(kube_pod_info)",
+              "legendFormat": "Pods"
+            }
+          ]
+        },
+        {
+          "title": "Total Namespaces",
+          "type": "stat",
+          "gridPos": {
+            "h": 4,
+            "w": 3,
+            "x": 6,
+            "y": 0
+          },
+          "targets": [
+            {
+              "expr": "count(kube_namespace_info)",
+              "legendFormat": "Namespaces"
+            }
+          ]
+        },
+        {
+          "title": "Cluster CPU Usage",
+          "type": "stat",
+          "gridPos": {
+            "h": 4,
+            "w": 3,
+            "x": 9,
+            "y": 0
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(node_cpu_seconds_total{mode!=\"idle\"}[1m]))",
+              "legendFormat": "CPU Cores"
+            }
+          ]
+        },
+        {
+          "title": "Cluster Memory Usage",
+          "type": "stat",
+          "gridPos": {
+            "h": 4,
+            "w": 3,
+            "x": 12,
+            "y": 0
+          },
+          "targets": [
+            {
+              "expr": "(sum(node_memory_MemTotal_bytes) - sum(node_memory_MemAvailable_bytes)) / 1024 / 1024 / 1024",
+              "legendFormat": "Memory (GB)"
+            }
+          ]
+        },
+        {
+          "title": "Node CPU Usage %",
+          "type": "graph",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 4
+          },
+          "targets": [
+            {
+              "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[1m])) * 100)",
+              "legendFormat": "{{ instance }}"
+            }
+          ]
+        },
+        {
+          "title": "Node Memory Usage %",
+          "type": "graph",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 4
+          },
+          "targets": [
+            {
+              "expr": "100 - ((node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100)",
+              "legendFormat": "{{ instance }}"
+            }
+          ]
+        },
+        {
+          "title": "CPU Requests & Limits (All Namespaces)",
+          "type": "table",
+          "gridPos": {
+            "h": 12,
+            "w": 12,
+            "x": 0,
+            "y": 12
+          },
+          "targets": [
+            {
+              "expr": "kube_pod_container_resource_requests{resource=\"cpu\"}",
+              "format": "table",
+              "instant": true
+            }
+          ]
+        },
+        {
+          "title": "CPU Limits (All Namespaces)",
+          "type": "table",
+          "gridPos": {
+            "h": 12,
+            "w": 12,
+            "x": 12,
+            "y": 12
+          },
+          "targets": [
+            {
+              "expr": "kube_pod_container_resource_limits{resource=\"cpu\"}",
+              "format": "table",
+              "instant": true
+            }
+          ]
+        },
+        {
+          "title": "Memory Requests (All Namespaces - MB)",
+          "type": "table",
+          "gridPos": {
+            "h": 12,
+            "w": 12,
+            "x": 0,
+            "y": 24
+          },
+          "targets": [
+            {
+              "expr": "round(kube_pod_container_resource_requests{resource=\"memory\"} / 1024 / 1024, 0.1)",
+              "format": "table",
+              "instant": true
+            }
+          ]
+        },
+        {
+          "title": "Memory Limits (All Namespaces - MB)",
+          "type": "table",
+          "gridPos": {
+            "h": 12,
+            "w": 12,
+            "x": 12,
+            "y": 24
+          },
+          "targets": [
+            {
+              "expr": "round(kube_pod_container_resource_limits{resource=\"memory\"} / 1024 / 1024, 0.1)",
+              "format": "table",
+              "instant": true
+            }
+          ]
+        },
+        {
+          "title": "Pod Restart Count (All Namespaces)",
+          "type": "table",
+          "gridPos": {
+            "h": 10,
+            "w": 24,
+            "x": 0,
+            "y": 36
+          },
+          "targets": [
+            {
+              "expr": "sum by (pod, namespace) (kube_pod_container_status_restarts_total)",
+              "format": "table",
+              "instant": true,
+              "legendFormat": "{{ pod }} - {{ namespace }}"
+            }
+          ]
+        },
+        {
+          "title": "Pod Status (Running/Pending/Failed)",
+          "type": "table",
+          "gridPos": {
+            "h": 12,
+            "w": 12,
+            "x": 0,
+            "y": 46
+          },
+          "targets": [
+            {
+              "expr": "kube_pod_status_phase",
+              "format": "table",
+              "instant": true,
+              "legendFormat": "{{ pod }} - {{ namespace }} - {{ phase }}"
+            }
+          ]
+        },
+        {
+          "title": "Pod Container Ready Status",
+          "type": "table",
+          "gridPos": {
+            "h": 12,
+            "w": 12,
+            "x": 12,
+            "y": 46
+          },
+          "targets": [
+            {
+              "expr": "kube_pod_container_status_ready",
+              "format": "table",
+              "instant": true,
+              "legendFormat": "{{ pod }} - {{ namespace }} - Ready: {{ value }}"
+            }
+          ]
+        },
+        {
+          "title": "Network In (Bytes/Sec)",
+          "type": "graph",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 58
+          },
+          "targets": [
+            {
+              "expr": "rate(node_network_receive_bytes_total{device!=\"lo\"}[1m])",
+              "legendFormat": "{{ device }} - {{ instance }}"
+            }
+          ]
+        },
+        {
+          "title": "Network Out (Bytes/Sec)",
+          "type": "graph",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 58
+          },
+          "targets": [
+            {
+              "expr": "rate(node_network_transmit_bytes_total{device!=\"lo\"}[1m])",
+              "legendFormat": "{{ device }} - {{ instance }}"
+            }
+          ]
+        },
+        {
+          "title": "Network Errors & Drops",
+          "type": "table",
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 36
+          },
+          "targets": [
+            {
+              "expr": "node_network_receive_errs_total + node_network_transmit_errs_total + node_network_receive_drop_total + node_network_transmit_drop_total",
+              "format": "table",
+              "instant": true,
+              "legendFormat": "{{ device }} - {{ instance }}"
+            }
+          ]
+        }
+      ]
+    }
