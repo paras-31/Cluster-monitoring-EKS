@@ -397,6 +397,21 @@ http://k8s-monitori-grafanas-2a92f98a2e-7f5015763c8b45b2.elb.us-east-1.amazonaws
 ### **Step 4: View Dashboard**
 Navigate to: **Dashboards** → **Kubernetes Cluster Monitoring**
 
+## 📸 Dashboard Preview
+
+Here's what the Kubernetes Cluster Monitoring dashboard looks like:
+
+![Grafana Dashboard](./dashboard-screenshot.png)
+
+**Dashboard Features Visible**:
+- **Top Row Stats**: Total Nodes (2), Total Pods (35), Total Namespaces, Cluster CPU Usage (2.63 cores), Cluster Memory Usage (6.65 GB)
+- **Node CPU Usage Graph**: Shows CPU utilization trends for both worker nodes over time
+- **Node Memory Usage Graph**: Shows memory utilization (around 70%) per node
+- **CPU Requests & Limits Tables**: Shows actual CPU allocations for pods in all namespaces
+- **Clean, Dark Theme**: Easy on the eyes for long monitoring sessions
+
+
+
 ## 📊 Understanding Dashboard Metrics
 
 ### **CPU Requests vs CPU Limits**
