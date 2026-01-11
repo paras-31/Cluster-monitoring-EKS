@@ -71,9 +71,9 @@ data:
           - source_labels: [__address__]
             action: replace
             regex: ([^:]+)(?::\d+)?
-            replacement: ${1}:4194
+            replacement: ${1}:10250
             target_label: __address__
-        metrics_path: /metrics
+        metrics_path: /metrics/cadvisor
       
       # Pod metrics with resource utilization
       - job_name: 'kubernetes-pods'
@@ -190,6 +190,7 @@ spec:
   selector:
     app: prometheus
   type: LoadBalancer
+  loadBalancerClass: service.k8s.aws/nlb
   ports:
     - name: web
       port: 80
