@@ -47,300 +47,428 @@ metadata:
 data:
   kubernetes-dashboard.json: |
     {
-      "title": "Kubernetes Cluster Monitoring",
-      "uid": "kubernetes-cluster",
+      "title": "EKS / Kubernetes Overview",
+      "uid": "eks-kubernetes-overview",
       "timezone": "browser",
-      "schemaVersion": 16,
-      "version": 0,
+      "schemaVersion": 39,
+      "version": 4,
       "refresh": "30s",
       "time": {
         "from": "now-1h",
         "to": "now"
       },
+      "templating": {
+        "list": [
+          {
+            "name": "node",
+            "label": "Node (instance)",
+            "type": "query",
+            "datasource": "Prometheus",
+            "query": "label_values(node_cpu_seconds_total, instance)",
+            "refresh": 1,
+            "includeAll": true,
+            "multi": true,
+            "allValue": ".*",
+            "current": { "text": "All", "value": "$__all" }
+          },
+          {
+            "name": "namespace",
+            "label": "Namespace",
+            "type": "query",
+            "datasource": "Prometheus",
+            "query": "label_values(kube_namespace_info, namespace)",
+            "refresh": 1,
+            "includeAll": true,
+            "multi": true,
+            "allValue": ".*",
+            "current": { "text": "All", "value": "$__all" }
+          }
+        ]
+      },
       "panels": [
         {
-          "title": "Total Nodes",
+          "type": "row",
+          "title": "Pod Scheduling Capacity (how many pods can be scheduled?)",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+          "collapsed": false
+        },
+        {
           "type": "stat",
-          "gridPos": {
-            "h": 4,
-            "w": 3,
-            "x": 0,
-            "y": 0
-          },
+          "title": "Total Pod Capacity (allocatable)",
+          "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
+          "targets": [
+            { "expr": "sum(kube_node_status_allocatable{resource=\"pods\"})", "legendFormat": "allocatable" }
+          ],
+          "fieldConfig": { "defaults": { "unit": "none", "min": 0 } }
+        },
+        {
+          "type": "stat",
+          "title": "Pods Scheduled (with node)",
+          "gridPos": { "h": 4, "w": 6, "x": 6, "y": 1 },
+          "targets": [
+            { "expr": "count(kube_pod_info{node!=\"\"})", "legendFormat": "scheduled" }
+          ],
+          "fieldConfig": { "defaults": { "unit": "none", "min": 0 } }
+        },
+        {
+          "type": "stat",
+          "title": "Remaining Pod Slots",
+          "gridPos": { "h": 4, "w": 6, "x": 12, "y": 1 },
+          "targets": [
+            { "expr": "sum(kube_node_status_allocatable{resource=\"pods\"}) - count(kube_pod_info{node!=\"\"})", "legendFormat": "remaining" }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "red", "value": null },
+                  { "color": "orange", "value": 5 },
+                  { "color": "green", "value": 10 }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "type": "stat",
+          "title": "Pod Slot Utilization",
+          "gridPos": { "h": 4, "w": 6, "x": 18, "y": 1 },
+          "targets": [
+            { "expr": "100 * count(kube_pod_info{node!=\"\"}) / sum(kube_node_status_allocatable{resource=\"pods\"})", "legendFormat": "util%" }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "min": 0,
+              "max": 100,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "orange", "value": 70 },
+                  { "color": "red", "value": 90 }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "type": "table",
+          "title": "Per-Node Pod Capacity (allocatable / used / remaining)",
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 5 },
           "targets": [
             {
-              "expr": "count(kube_node_info)",
-              "legendFormat": "Nodes"
+              "expr": "sum by (node) (kube_node_status_allocatable{resource=\"pods\"})",
+              "format": "table",
+              "instant": true
+            },
+            {
+              "expr": "count by (node) (kube_pod_info{node!=\"\"})",
+              "format": "table",
+              "instant": true
+            },
+            {
+              "expr": "sum by (node) (kube_node_status_allocatable{resource=\"pods\"}) - count by (node) (kube_pod_info{node!=\"\"})",
+              "format": "table",
+              "instant": true
             }
           ]
         },
         {
-          "title": "Total Pods",
+          "type": "row",
+          "title": "Cluster Health (quick view)",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 13 },
+          "collapsed": false
+        },
+        {
           "type": "stat",
-          "gridPos": {
-            "h": 4,
-            "w": 3,
-            "x": 3,
-            "y": 0
-          },
+          "title": "Nodes Ready",
+          "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
           "targets": [
-            {
-              "expr": "count(kube_pod_info)",
-              "legendFormat": "Pods"
-            }
+            { "expr": "sum(kube_node_status_condition{condition=\"Ready\",status=\"true\"})", "legendFormat": "Ready" }
           ]
         },
         {
-          "title": "Total Namespaces",
           "type": "stat",
-          "gridPos": {
-            "h": 4,
-            "w": 3,
-            "x": 6,
-            "y": 0
-          },
+          "title": "Pods Running",
+          "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
           "targets": [
-            {
-              "expr": "count(kube_namespace_info)",
-              "legendFormat": "Namespaces"
-            }
+            { "expr": "sum(kube_pod_status_phase{phase=\"Running\"})", "legendFormat": "Running" }
           ]
         },
         {
-          "title": "Cluster CPU Usage",
           "type": "stat",
-          "gridPos": {
-            "h": 4,
-            "w": 3,
-            "x": 9,
-            "y": 0
-          },
+          "title": "Pods Pending",
+          "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
           "targets": [
-            {
-              "expr": "sum(rate(node_cpu_seconds_total{mode!=\"idle\"}[1m]))",
-              "legendFormat": "CPU Cores"
+            { "expr": "sum(kube_pod_status_phase{phase=\"Pending\"})", "legendFormat": "Pending" }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "orange", "value": 1 }
+                ]
+              }
             }
-          ]
+          }
         },
         {
-          "title": "Cluster Memory Usage",
           "type": "stat",
-          "gridPos": {
-            "h": 4,
-            "w": 3,
-            "x": 12,
-            "y": 0
-          },
+          "title": "Pods Failed/Unknown",
+          "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
           "targets": [
-            {
-              "expr": "(sum(node_memory_MemTotal_bytes) - sum(node_memory_MemAvailable_bytes)) / 1024 / 1024 / 1024",
-              "legendFormat": "Memory (GB)"
+            { "expr": "sum(kube_pod_status_phase{phase=~\"Failed|Unknown\"})", "legendFormat": "Bad" }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "red", "value": 1 }
+                ]
+              }
             }
-          ]
+          }
         },
         {
-          "title": "Node CPU Usage %",
-          "type": "graph",
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 0,
-            "y": 4
-          },
+          "type": "stat",
+          "title": "Restarts (last 5m)",
+          "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
+          "targets": [
+            { "expr": "sum(increase(kube_pod_container_status_restarts_total[5m]))", "legendFormat": "Restarts" }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "orange", "value": 1 },
+                  { "color": "red", "value": 5 }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "type": "stat",
+          "title": "CPU Utilization (cluster)",
+          "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
+          "targets": [
+            { "expr": "100 - (avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)", "legendFormat": "CPU%" }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "min": 0,
+              "max": 100,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "orange", "value": 70 },
+                  { "color": "red", "value": 90 }
+                ]
+              }
+            }
+          }
+        },
+
+        {
+          "type": "row",
+          "title": "Node Utilization (per node)",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+          "collapsed": false
+        },
+        {
+          "type": "timeseries",
+          "title": "Node CPU Utilization % (per node)",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
           "targets": [
             {
-              "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[1m])) * 100)",
+              "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\",instance=~\"$node\"}[5m])) * 100)",
               "legendFormat": "{{ instance }}"
             }
-          ]
+          ],
+          "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 } }
         },
         {
-          "title": "Node Memory Usage %",
-          "type": "graph",
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 12,
-            "y": 4
-          },
+          "type": "timeseries",
+          "title": "Node Memory Utilization % (per node)",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
           "targets": [
             {
-              "expr": "100 - ((node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100)",
+              "expr": "100 - (avg by (instance) (node_memory_MemAvailable_bytes{instance=~\"$node\"} / node_memory_MemTotal_bytes{instance=~\"$node\"}) * 100)",
               "legendFormat": "{{ instance }}"
             }
-          ]
+          ],
+          "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 } }
         },
         {
-          "title": "CPU Requests & Limits (All Namespaces)",
-          "type": "table",
-          "gridPos": {
-            "h": 12,
-            "w": 12,
-            "x": 0,
-            "y": 12
-          },
+          "type": "timeseries",
+          "title": "Cluster CPU Utilization %",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+          "targets": [
+            { "expr": "100 - (avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)", "legendFormat": "CPU%" }
+          ],
+          "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 } }
+        },
+        {
+          "type": "timeseries",
+          "title": "Cluster Memory Utilization %",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+          "targets": [
+            { "expr": "100 * (1 - (sum(node_memory_MemAvailable_bytes) / sum(node_memory_MemTotal_bytes)))", "legendFormat": "Mem%" }
+          ],
+          "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 } }
+        },
+
+        {
+          "type": "row",
+          "title": "Namespace Utilization (who is consuming?)",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 22 },
+          "collapsed": false
+        },
+        {
+          "type": "timeseries",
+          "title": "Namespace CPU Usage (cores)",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 23 },
           "targets": [
             {
-              "expr": "kube_pod_container_resource_requests{resource=\"cpu\"}",
+              "expr": "sum by (namespace) (rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\",container!=\"\",pod!=\"\"}[5m]))",
+              "legendFormat": "{{ namespace }}"
+            }
+          ],
+          "fieldConfig": { "defaults": { "unit": "cores", "min": 0 } }
+        },
+        {
+          "type": "timeseries",
+          "title": "Namespace Memory Usage (GiB)",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 23 },
+          "targets": [
+            {
+              "expr": "sum by (namespace) (container_memory_working_set_bytes{namespace=~\"$namespace\",container!=\"\",pod!=\"\"}) / 1024 / 1024 / 1024",
+              "legendFormat": "{{ namespace }}"
+            }
+          ],
+          "fieldConfig": { "defaults": { "unit": "gbytes", "min": 0 } }
+        },
+        {
+          "type": "table",
+          "title": "Top 10 Namespaces by CPU Usage (cores)",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 31 },
+          "targets": [
+            {
+              "expr": "topk(10, sum by (namespace) (rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\",container!=\"\",pod!=\"\"}[5m])))",
               "format": "table",
               "instant": true
             }
           ]
         },
         {
-          "title": "CPU Limits (All Namespaces)",
           "type": "table",
-          "gridPos": {
-            "h": 12,
-            "w": 12,
-            "x": 12,
-            "y": 12
-          },
+          "title": "Top 10 Namespaces by Memory Usage (GiB)",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 31 },
           "targets": [
             {
-              "expr": "kube_pod_container_resource_limits{resource=\"cpu\"}",
+              "expr": "topk(10, sum by (namespace) (container_memory_working_set_bytes{namespace=~\"$namespace\",container!=\"\",pod!=\"\"})) / 1024 / 1024 / 1024",
               "format": "table",
               "instant": true
             }
           ]
         },
         {
-          "title": "Memory Requests (All Namespaces - MB)",
           "type": "table",
-          "gridPos": {
-            "h": 12,
-            "w": 12,
-            "x": 0,
-            "y": 24
-          },
+          "title": "Top 10 Pods by CPU (cores)",
+          "gridPos": { "h": 10, "w": 12, "x": 0, "y": 39 },
           "targets": [
             {
-              "expr": "round(kube_pod_container_resource_requests{resource=\"memory\"} / 1024 / 1024, 0.1)",
+              "expr": "topk(10, sum by (namespace, pod) (rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\",container!=\"\",pod!=\"\"}[5m])))",
               "format": "table",
               "instant": true
             }
           ]
         },
         {
-          "title": "Memory Limits (All Namespaces - MB)",
           "type": "table",
-          "gridPos": {
-            "h": 12,
-            "w": 12,
-            "x": 12,
-            "y": 24
-          },
+          "title": "Top 10 Pods by Memory (GiB)",
+          "gridPos": { "h": 10, "w": 12, "x": 12, "y": 39 },
           "targets": [
             {
-              "expr": "round(kube_pod_container_resource_limits{resource=\"memory\"} / 1024 / 1024, 0.1)",
+              "expr": "topk(10, sum by (namespace, pod) (container_memory_working_set_bytes{namespace=~\"$namespace\",container!=\"\",pod!=\"\"})) / 1024 / 1024 / 1024",
+              "format": "table",
+              "instant": true
+            }
+          ]
+        },
+
+        {
+          "type": "row",
+          "title": "Requests vs Limits (capacity planning)",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 49 },
+          "collapsed": false
+        },
+        {
+          "type": "table",
+          "title": "Top 10 Namespaces by CPU Requests (cores)",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 50 },
+          "targets": [
+            {
+              "expr": "topk(10, sum by (namespace) (kube_pod_container_resource_requests{namespace=~\"$namespace\",resource=\"cpu\"}))",
               "format": "table",
               "instant": true
             }
           ]
         },
         {
-          "title": "Pod Restart Count (All Namespaces)",
           "type": "table",
-          "gridPos": {
-            "h": 10,
-            "w": 24,
-            "x": 0,
-            "y": 36
-          },
+          "title": "Top 10 Namespaces by Memory Requests (GiB)",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 50 },
           "targets": [
             {
-              "expr": "sum by (pod, namespace) (kube_pod_container_status_restarts_total)",
+              "expr": "topk(10, sum by (namespace) (kube_pod_container_resource_requests{namespace=~\"$namespace\",resource=\"memory\"})) / 1024 / 1024 / 1024",
               "format": "table",
-              "instant": true,
-              "legendFormat": "{{ pod }} - {{ namespace }}"
+              "instant": true
             }
           ]
         },
+
         {
-          "title": "Pod Status (Running/Pending/Failed)",
-          "type": "table",
-          "gridPos": {
-            "h": 12,
-            "w": 12,
-            "x": 0,
-            "y": 46
-          },
-          "targets": [
-            {
-              "expr": "kube_pod_status_phase",
-              "format": "table",
-              "instant": true,
-              "legendFormat": "{{ pod }} - {{ namespace }} - {{ phase }}"
-            }
-          ]
+          "type": "row",
+          "title": "Networking (cluster)",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 58 },
+          "collapsed": false
         },
         {
-          "title": "Pod Container Ready Status",
-          "type": "table",
-          "gridPos": {
-            "h": 12,
-            "w": 12,
-            "x": 12,
-            "y": 46
-          },
+          "type": "timeseries",
+          "title": "Network Receive (bytes/sec)",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 59 },
           "targets": [
             {
-              "expr": "kube_pod_container_status_ready",
-              "format": "table",
-              "instant": true,
-              "legendFormat": "{{ pod }} - {{ namespace }} - Ready: {{ value }}"
+              "expr": "sum(rate(node_network_receive_bytes_total{device!=\"lo\"}[5m]))",
+              "legendFormat": "rx"
             }
-          ]
+          ],
+          "fieldConfig": { "defaults": { "unit": "Bps", "min": 0 } }
         },
         {
-          "title": "Network In (Bytes/Sec)",
-          "type": "graph",
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 0,
-            "y": 58
-          },
+          "type": "timeseries",
+          "title": "Network Transmit (bytes/sec)",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 59 },
           "targets": [
             {
-              "expr": "rate(node_network_receive_bytes_total{device!=\"lo\"}[1m])",
-              "legendFormat": "{{ device }} - {{ instance }}"
+              "expr": "sum(rate(node_network_transmit_bytes_total{device!=\"lo\"}[5m]))",
+              "legendFormat": "tx"
             }
-          ]
-        },
-        {
-          "title": "Network Out (Bytes/Sec)",
-          "type": "graph",
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 12,
-            "y": 58
-          },
-          "targets": [
-            {
-              "expr": "rate(node_network_transmit_bytes_total{device!=\"lo\"}[1m])",
-              "legendFormat": "{{ device }} - {{ instance }}"
-            }
-          ]
-        },
-        {
-          "title": "Network Errors & Drops",
-          "type": "table",
-          "gridPos": {
-            "h": 8,
-            "w": 24,
-            "x": 0,
-            "y": 36
-          },
-          "targets": [
-            {
-              "expr": "node_network_receive_errs_total + node_network_transmit_errs_total + node_network_receive_drop_total + node_network_transmit_drop_total",
-              "format": "table",
-              "instant": true,
-              "legendFormat": "{{ device }} - {{ instance }}"
-            }
-          ]
+          ],
+          "fieldConfig": { "defaults": { "unit": "Bps", "min": 0 } }
         }
       ]
     }
